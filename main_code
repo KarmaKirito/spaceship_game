@@ -1,0 +1,395 @@
+import pygame
+import sys
+import random
+
+RES = (800, 600)
+screen = pygame.display.set_mode(RES)
+surface = pygame.Surface((800, 600))
+pygame.init()
+pygame.display.set_caption('projectiles test')
+clock = pygame.time.Clock()
+FPS = 60
+game_over = False
+font = pygame.font.SysFont('Arial', 24)
+spaceship1 = pygame.image.load('spaceships_bullets_game/spaceship1.png')
+spaceship2 = pygame.image.load('spaceships_bullets_game/spaceship2.png')
+spaceship3 = pygame.image.load('spaceships_bullets_game/spaceship3.png')
+background1 = pygame.image.load('spaceships_bullets_game/background1.png')
+background = pygame.image.load('spaceships_bullets_game/space_shoot_bg.png')
+enemy_speed = 1
+enemies_killed = 0
+level = 1
+enemies_off_screen_count = 0
+player_inventory = []
+
+
+def change_update(position, screen, list):
+    for buttons in list:
+        buttons.changeColor(position)
+        buttons.update(screen)
+
+
+class Button:
+    def __init__(self, image, text_input, pos, font, base_color, hovering_color):
+        self.image, self.text_input = image, text_input
+        self.x_cor = pos[0]
+        self.y_cor = pos[1]
+        self.font, self.base_color, self.hovering_color = font, base_color, hovering_color
+        self.text = self.font.render(self.text_input, True, (255, 255, 255))
+        if self.image is None:
+            self.image = self.text
+        self.rect = self.image.get_rect(center=(self.x_cor, self.y_cor))
+        self.text_rect = self.text.get_rect(center=(self.x_cor, self.y_cor))
+
+    def update(self, screen):
+        if self.image is not None:
+            screen.blit(self.image, self.rect)
+        screen.blit(self.text, self.text_rect)
+
+    def checkforInput(self, position):
+        if position[0] in range(self.rect.left, self.rect.right) and position[1] in range(self.rect.top,
+                                                                                          self.rect.bottom):
+            return True
+        return False
+
+    def changeColor(self, position):
+        if position[0] in range(self.rect.left, self.rect.right) and position[1] in range(self.rect.top,
+                                                                                          self.rect.bottom):
+            self.text = self.font.render(self.text_input, True, self.hovering_color)
+        else:
+            self.text = self.font.render(self.text_input, True, self.base_color)
+
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, picture_path, player_number):
+        super().__init__()
+        self.image = picture_path
+        self.image = pygame.transform.scale(self.image, (100, 100))
+        self.rect = self.image.get_rect(center=(600/2, 500))
+        self.attack_available = True
+        self.last_time_shoot = pygame.time.get_ticks()
+        self.gold = 0
+        self.player_number = player_number
+
+    def direction(self, dir):
+        if dir == 'left':
+            self.rect.x -= 5
+            if self.rect.right <= 20:
+                self.rect.x -= self.rect.right - 20
+        if dir == 'right':
+            self.rect.x += 5
+            if self.rect.right >= 620:
+                self.rect.x += 620 - self.rect.right
+
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if self.player_number == 1:
+            if keys[pygame.K_a]:
+                self.direction('left')
+            elif keys[pygame.K_d]:
+                self.direction('right')
+            if self.cooldown():
+                projectiles_group.add(projectiles(1))
+        elif self.player_number == 2:
+            if keys[pygame.K_LEFT]:
+                self.direction('left')
+            elif keys[pygame.K_RIGHT]:
+                self.direction('right')
+            if self.cooldown():
+                projectiles_group.add(projectiles(2))
+
+    def cooldown(self):
+        cooldown_time = 300
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_time_shoot > cooldown_time:
+            self.last_time_shoot = current_time
+            self.attack_available = True
+        else:
+            self.attack_available = False
+        return self.attack_available
+
+
+class Projectiles(pygame.sprite.Sprite):
+    health = 1000
+
+    def __init__(self, pos_x, pos_y):
+        super().__init__()
+        self.image = pygame.image.load('spaceships_bullets_game/bullet3.png').convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 40))
+        self.rect = self.image.get_rect(center=(pos_x, pos_y))
+        self.health = 1000
+
+    def update(self):
+        self.rect.y -= 5
+
+
+class Enemy1(pygame.sprite.Sprite):
+    def __init__(self, pos_x, pos_y):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))
+        self.image.fill((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        self.rect = self.image.get_rect(center=(pos_x, pos_y))
+        self.health = 3000
+
+    def destroy(self, pp_group):
+        hit_list = pygame.sprite.spritecollide(self, pp_group, True)
+        for projectile in hit_list:
+            self.health -= projectile.health
+            if self.health <= 0:
+                self.kill()
+
+    def update(self):
+        self.rect.y += enemy_speed
+
+
+def projectiles(player):
+    if player == 1:
+        return Projectiles(player1.rect.centerx, player1.rect.centery)
+    else:
+        return Projectiles(player2.rect.centerx, player2.rect.centery)
+
+
+spaceship = spaceship1
+spaceship_2 = spaceship2
+player1 = Player(spaceship, 1)
+player2 = Player(spaceship_2, 2)
+player_group = pygame.sprite.Group()
+enemy_group = pygame.sprite.Group()
+player_group.add(player1, player2)
+Player2_clicked = False
+projectiles_group = pygame.sprite.Group()
+enemy_onscreen_count = 15
+
+
+def get_font(size):
+    return pygame.font.Font('font.ttf', size)
+
+
+def money(gold):
+    money_count_text = font.render('Gold: {}'.format(gold), True, (255, 255, 0))
+    screen.blit(money_count_text, (610, 10))
+
+
+def levels(stages):
+    global level, enemy_speed, enemy_onscreen_count
+    stage = []
+    for i in range(0, 20):
+        stage.append(i)
+    stages = stage[stages]
+    level = stages
+    enemy_onscreen_count = stages * 2
+    enemy_speed = stages
+
+
+def optimise1(sprites_list):
+    for sprites in sprites_list:
+        sprites.update()
+        sprites.draw(screen)
+
+
+def game():
+    global enemies_killed, enemies_off_screen_count, game_over, player1, player_group, player2
+    player1 = Player(spaceship, 1)
+    player2 = Player(spaceship_2, 2)
+    player_group = pygame.sprite.Group()
+    player_group.add(player1, player2)
+    enemies_killed = 0
+    enemies_off_screen_count = 0
+    game_over = False
+    win = False
+    while True:
+        game_mouse = pygame.mouse.get_pos()
+        game_menu = Button(None, 'Menu', (300, 200), get_font(30), (0, 255, 0), (0, 255, 255))
+        screen.fill((30, 30, 30))
+        screen.blit(background1, (0, 0))
+        list = [player_group, enemy_group, projectiles_group]
+        optimise1(list)
+        for projectile in projectiles_group:
+            if projectile.rect.top > RES[1]:
+                projectile.kill()
+            collided_enemies1 = pygame.sprite.spritecollide(projectile, enemy_group, False)
+            for enemy in collided_enemies1:
+                projectile.health -= enemy.health
+                print(enemy.health)
+                enemy.health -= Projectiles.health
+                if enemy.health <= 1:
+                    enemies_killed += 1
+                    player1.gold += 1000
+                    enemy.kill()
+                if projectile.health <= 1:
+                    projectile.kill()
+                if 30 < enemies_killed < 50:
+                    levels(2)
+                elif 50 <= enemies_killed < 90:
+                    levels(3)
+                elif 0 <= enemies_killed <= 30:
+                    levels(1)
+        for enemy in enemy_group:
+            enemy.destroy(projectiles_group)
+            if enemy.rect.top > RES[1]:
+                enemies_off_screen_count += 1
+                player1.gold -= 500
+                enemy.kill()
+        projectiles_group.update()
+        while len(enemy_group) < enemy_onscreen_count and enemies_killed < 100:
+            new_enemy = Enemy1(random.randint(0, 565), random.randint(20, 50))
+            enemy_group.add(new_enemy)
+        for projectile in projectiles_group:
+            if projectile.rect.top > RES[1]:
+                projectile.kill()
+        enemies_pass_text = font.render("Enemies passed: {}".format(enemies_off_screen_count), True, (255, 255, 255))
+        enemy_killed_text = font.render("Enemy1 killed: {}".format(enemies_killed), True, (255, 255, 255))
+        level_text = font.render("Level: {}".format(level), True, (255, 255, 255))
+        bullet_health_text = font.render("bullet health: {}".format(Projectiles.health), True, (255, 255, 255))
+        lose_text = font.render("DEFEATED", True, (255, 0, 0))
+        win_text = font.render("YOU WON!!", True, (0, 255, 0))
+        money(player1.gold)
+        if enemies_killed == 100:
+            win = True
+            game_over = True
+        if enemies_off_screen_count == 30:
+            win = False
+            game_over = True
+        if game_over:
+            screen.blit(enemy_killed_text, (610, 30))
+            screen.blit(level_text, (610, 60))
+            screen.blit(enemies_pass_text, (610, 570))
+            screen.blit(bullet_health_text, (610, 100))
+            game_menu.changeColor(game_mouse)
+            game_menu.update(screen)
+            if win:
+                screen.blit(win_text, (600 / 2 - 50, RES[1] / 2 - 25))
+            else:
+                screen.blit(lose_text, (600 / 2 - 50, RES[1] / 2 - 25))
+        else:
+            screen.blit(enemy_killed_text, (610, 30))
+            screen.blit(level_text, (610, 60))
+            screen.blit(enemies_pass_text, (610, 570))
+            screen.blit(bullet_health_text, (610, 100))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if game_menu.checkforInput(game_mouse):
+                    menu()
+        pygame.display.flip()
+        clock.tick(FPS)
+        pygame.display.update()
+
+
+def upgrade():
+    upgrade_cost = 0
+    while True:
+        screen.fill((100, 100, 100))
+        upgrade_mouse = pygame.mouse.get_pos()
+        pygame.draw.rect(screen, (17, 130, 242), (0, 0, 1280, 50))
+        upgrade_title_text = get_font(20).render('Upgrade your ship power', True, (17, 235, 242))
+        upgrade_bullet_health = Button(None, '+ Strength', (400, 75), get_font(45), (0, 0, 0), (255, 255, 255))
+        upgrade_back = Button(None, "<--", (30, 20), get_font(20), (8, 70, 99), (255, 255, 255))
+        bullet_health_text = font.render("bullet health: {}".format(Projectiles.health), True, (255, 255, 255))
+        player_gold_text = font.render("gold: {}".format(player1.gold), True, (255, 255, 0))
+        screen.blit(upgrade_title_text, (180, 20))
+        list = [upgrade_bullet_health, upgrade_back]
+        screen.blit(bullet_health_text, (610, 400))
+        screen.blit(player_gold_text, (610, 500))
+        change_update(upgrade_mouse, screen, list)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if upgrade_bullet_health.checkforInput(upgrade_mouse):
+                    upgrade_cost += 200
+                    Projectiles.health += 100
+                    player1.gold -= upgrade_cost
+                if upgrade_back.checkforInput(upgrade_mouse):
+                    menu()
+        pygame.display.flip()
+        pygame.display.update()
+
+
+def spaceships_museum():
+    global spaceship, player1, player_group, spaceship_2, Player2_clicked, enemy_group
+    choosing_2 = False
+    while True:
+        museum_mouse = pygame.mouse.get_pos()
+        screen.fill((100, 100, 100))
+        screen.blit(spaceship1, (0, 300))
+        screen.blit(spaceship2, (300, 300))
+        screen.blit(spaceship3, (575, 300))
+        type1 = Button(image=None, text_input='Type 1', pos=(120, 250), font=get_font(30), base_color=(255, 255, 255),
+                       hovering_color=(0, 255, 0))
+        type2 = Button(image=None, text_input='Type 2', pos=(420, 250), font=get_font(30), base_color=(255, 255, 255),
+                       hovering_color=(0, 255, 0))
+        type3 = Button(image=None, text_input='Type 3', pos=(695, 250), font=get_font(30), base_color=(255, 255, 255),
+                       hovering_color=(0, 255, 0))
+        start = Button(image=None, text_input='Start', pos=(RES[0]/2, 50), font=get_font(45), base_color=(255, 255, 255),
+                       hovering_color=(0, 255, 0))
+        button_list = [type1, type2, type3, start]
+        change_update(museum_mouse, screen, button_list)
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_e]:
+            choosing_2 = True
+        if keys[pygame.K_q]:
+            choosing_2 = False
+        if choosing_2:
+            second_choose = get_font(30).render('Choosing player 2', True, (66, 245, 141))
+            screen.blit(second_choose, (150, 100))
+        else:
+            first_choose = get_font(30).render('Choosing player 1', True, (66, 245, 141))
+            screen.blit(first_choose, (150, 100))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if type1.checkforInput(museum_mouse):
+                    if choosing_2:
+                        spaceship_2 = spaceship1
+                    else:
+                        spaceship = spaceship1
+                if type2.checkforInput(museum_mouse):
+                    if choosing_2:
+                        spaceship_2 = spaceship2
+                    else:
+                        spaceship = spaceship2
+                if type3.checkforInput(museum_mouse):
+                    if choosing_2:
+                        spaceship_2 = spaceship3
+                    else:
+                        spaceship = spaceship3
+                if start.checkforInput(museum_mouse):
+                    game()
+        pygame.display.flip()
+        pygame.display.update()
+
+
+def menu():
+    while True:
+        screen.blit(background, (0, 0))
+        menu_mouse = pygame.mouse.get_pos()
+        choose_spaceship_button = Button(image=None, text_input='Spaceships', pos=(RES[0] / 2, 200), font=get_font(60),
+                                         base_color=(0, 255, 0), hovering_color=(255, 255, 255))
+        menu_play = Button(image=None, text_input='Play', pos=(RES[0] / 2, 350), font=get_font(60),
+                           base_color=(0, 255, 0), hovering_color=(255, 255, 255))
+        menu_upgrade = Button(image=None, text_input="upgrades", pos=(RES[0]/2, 500),
+                              font=get_font(60), base_color=(0, 255, 0), hovering_color=(255, 255, 255))
+        button_list = [choose_spaceship_button, menu_play, menu_upgrade]
+        change_update(menu_mouse, screen, button_list)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if choose_spaceship_button.checkforInput(menu_mouse):
+                    spaceships_museum()
+                if menu_play.checkforInput(menu_mouse):
+                    game()
+                if menu_upgrade.checkforInput(menu_mouse):
+                    upgrade()
+        pygame.display.flip()
+        pygame.display.update()
+
+
+menu()
