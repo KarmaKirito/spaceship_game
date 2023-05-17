@@ -242,10 +242,10 @@ def game():
     game_over = False
     win = False
     paused = False
-    game_mouse = pygame.mouse.get_pos()
     pause_text = get_font(20).render("Paused", True, (255, 255, 255))
     game_quit = Button(None, 'Quit', (310, 225), get_font(30), (0, 255, 0), (0, 255, 255))
     while True:
+        game_mouse1 = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -254,9 +254,16 @@ def game():
                 if event.key == pygame.K_ESCAPE:
                     paused = not paused
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if game_quit.checkforInput(game_mouse):
+                if game_quit.checkforInput(game_mouse1):
                     menu()
+        if paused:
+            screen.blit(pause_text, (250, 275))
+            game_quit.changeColor(game_mouse1)
+            game_quit.update(screen)
+        pygame.display.flip()
+        pygame.display.update()
         while not paused:
+            game_mouse = pygame.mouse.get_pos()
             game_menu = Button(None, 'Menu', (300, 200), get_font(30), (0, 255, 0), (0, 255, 255))
             screen.fill((30, 30, 30))
             screen.blit(background1, (0, 0))
@@ -333,15 +340,14 @@ def game():
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if game_menu.checkforInput(game_mouse):
+                    game_mouse = pygame.mouse.get_pos()
+                    if game_quit.checkforInput(game_mouse):
+                        menu()
+                    if not paused and game_menu.checkforInput(game_mouse):
                         menu()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         paused = not paused
-            if paused:
-                screen.blit(pause_text, (250, 275))
-                game_quit.changeColor(game_mouse)
-                game_quit.update(screen)
             pygame.display.flip()
             clock.tick(FPS)
             pygame.display.update()
@@ -486,18 +492,6 @@ def menu():
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if choose_spaceship_button.checkforInput(menu_mouse):
-                    spaceships_museum()
-                if menu_play.checkforInput(menu_mouse):
-                    game()
-                if menu_upgrade.checkforInput(menu_mouse):
-                    upgrade()
-        pygame.display.flip()
-        pygame.display.update()
-
-
-menu()
-
                 if choose_spaceship_button.checkforInput(menu_mouse):
                     spaceships_museum()
                 if menu_play.checkforInput(menu_mouse):
