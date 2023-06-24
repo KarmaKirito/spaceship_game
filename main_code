@@ -64,6 +64,7 @@ class Button:
 class Player(pygame.sprite.Sprite):
     cooldown_time = 1000
     bullet_type = 1
+    shooting_type3 = False
 
     def __init__(self, picture_path, player_number):
         super().__init__()
@@ -74,11 +75,11 @@ class Player(pygame.sprite.Sprite):
         self.last_time_shoot = pygame.time.get_ticks()
         self.gold = 100000000
         self.player_number = player_number
-        self.shooting_type2 = True
+        self.shooting_type2 = False
 
     def projectiles2(self):
-        projectiles_group.add(Projectiles(self.rect.left, self.rect.centery))
-        projectiles_group.add(Projectiles(self.rect.right, self.rect.centery))
+        projectiles_group.add(Projectiles(self.rect.left, self.rect.centery, Projectiles.size_x, Projectiles.size_y))
+        projectiles_group.add(Projectiles(self.rect.right, self.rect.centery, Projectiles.size_x, Projectiles.size_y))
 
     def shoot(self):
         if self.attack_available:
@@ -102,25 +103,30 @@ class Player(pygame.sprite.Sprite):
             self.shooting_type2 = False
         else:
             self.shooting_type2 = True
+            if Player.bullet_type == 3:
+                Player.shooting_type3 = True
+            else:
+                Player.shooting_type3 = False
+
         keys = pygame.key.get_pressed()
         if self.player_number == 1:
             if keys[pygame.K_a]:
                 self.direction('left')
             elif keys[pygame.K_d]:
                 self.direction('right')
-            if keys[pygame.K_t] and self.shooting_type2:
-                self.shoot()
             if self.cooldown():
                 projectiles_group.add(projectiles(1))
+                if self.shooting_type2:
+                    self.shoot()
         elif self.player_number == 2:
             if keys[pygame.K_LEFT]:
                 self.direction('left')
             elif keys[pygame.K_RIGHT]:
                 self.direction('right')
-            if keys[pygame.K_KP1] and self.shooting_type2:
-                self.shoot()
             if self.cooldown():
                 projectiles_group.add(projectiles(2))
+                if self.shooting_type2:
+                    self.shoot()
 
     def cooldown(self):
         current_time = pygame.time.get_ticks()
@@ -135,11 +141,13 @@ class Player(pygame.sprite.Sprite):
 class Projectiles(pygame.sprite.Sprite):
     health = 1000
     speed = 5
+    size_x = 30
+    size_y = 40
 
-    def __init__(self, pos_x, pos_y):
+    def __init__(self, pos_x, pos_y, size_x, size_y):
         super().__init__()
         self.image = pygame.image.load('spaceships_bullets_game/bullet3.png').convert_alpha()
-        self.image = pygame.transform.scale(self.image, (30, 40))
+        self.image = pygame.transform.scale(self.image, (size_x, size_y))
         self.rect = self.image.get_rect(center=(pos_x, pos_y))
 
     def update(self):
@@ -147,12 +155,14 @@ class Projectiles(pygame.sprite.Sprite):
 
 
 class Enemy1(pygame.sprite.Sprite):
+    health = 500
+
     def __init__(self, pos_x, pos_y):
         super().__init__()
         self.image = pygame.Surface((30, 30))
         self.image.fill((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        self.pos_x, self.pos_y = pos_x, pos_y
         self.rect = self.image.get_rect(center=(pos_x, pos_y))
-        self.health = 300
 
     def destroy(self, pp_group):
         hit_list = pygame.sprite.spritecollide(self, pp_group, True)
@@ -186,13 +196,49 @@ class Enemy2(pygame.sprite.Sprite):
 
 def projectiles(player):
     if player == 1:
-        return Projectiles(player1.rect.centerx, player1.rect.centery)
+        return Projectiles(player1.rect.centerx, player1.rect.centery, Projectiles.size_x, Projectiles.size_y)
     else:
-        return Projectiles(player2.rect.centerx, player2.rect.centery)
+        return Projectiles(player2.rect.centerx, player2.rect.centery, Projectiles.size_x, Projectiles.size_y)
 
 
 def get_font(size):
     return pygame.font.Font('font.ttf', size)
+
+
+def load_explosion_animation():
+    animation_steps = [8, 8, 8, 8, 5]
+    animation_list = []
+    sprite_sheet = pygame.image.load('explosion_3_40_128.png').convert_alpha()
+    for y, animation in enumerate(animation_steps):
+        temp_img_list = []
+        for x in range(animation):
+            temp_img = sprite_sheet.subsurface(x*128, y*128, 128, 128)
+            temp_img_list.append(temp_img)
+        animation_list.append(temp_img_list)
+    return animation_list
+
+
+stage = 0
+frame_count = 0
+frame_index = 0
+
+
+def explosion_animate(x, y):
+    global stage, frame_count, frame_index
+    animation_speed = 5
+    animation_list = load_explosion_animation()
+    frame_count += 1
+    if frame_count >= animation_speed:
+        frame_index += 1
+        frame_count = 0
+        if frame_index >= len(animation_list[stage]):
+            frame_index = 0
+            stage += 1
+            if stage >= len(animation_list):
+                stage = 0
+
+    image = animation_list[stage][frame_index]
+    screen.blit(image, (x, y))
 
 
 spaceship = spaceship1
@@ -231,19 +277,17 @@ def optimise1(sprites_list):
 
 
 def game():
-    global enemies_killed, enemies_off_screen_count, game_over, player1, player_group, player2, enemy_onscreen_count
-    player1 = Player(spaceship, 1)
-    player2 = Player(spaceship_2, 2)
-    player_group = pygame.sprite.Group()
-    player_group.add(player1, player2)
+    global enemies_killed, enemies_off_screen_count, game_over, enemy_onscreen_count, projectiles_group, enemy1_group
     enemies_killed = 0
     enemies_off_screen_count = 0
-    enemy_onscreen_count = 15
+    enemy_onscreen_count = 20
     game_over = False
     win = False
     paused = False
     pause_text = get_font(20).render("Paused", True, (255, 255, 255))
     game_quit = Button(None, 'Quit', (310, 225), get_font(30), (0, 255, 0), (0, 255, 255))
+    projectiles_group = pygame.sprite.Group()
+    enemy1_group = pygame.sprite.Group()
     while True:
         game_mouse1 = pygame.mouse.get_pos()
         for event in pygame.event.get():
@@ -275,6 +319,7 @@ def game():
                 collided_enemies1 = pygame.sprite.spritecollide(projectile, enemy1_group, False)
                 for enemy in collided_enemies1:
                     projectile.health -= enemy.health
+                    explosion_animate(enemy.rect.x - 50, enemy.rect.y - 40)
                     enemy.health -= Projectiles.health
                     if enemy.health <= 1:
                         enemies_killed += 1
@@ -284,16 +329,22 @@ def game():
                         projectile.kill()
                     if 30 < enemies_killed < 70:
                         levels(2)
+                        Enemy1.health = 1000
                     elif 70 <= enemies_killed < 150:
                         levels(3)
+                        Enemy1.health = 1750
                     elif 150 <= enemies_killed < 250:
                         levels(4)
+                        Enemy1.health = 3000
                     elif 250 <= enemies_killed < 500:
                         levels(5)
-                    elif 500 <= enemies_killed < 1000:
+                        Enemy1.health = 5000
+                    elif 500 <= enemies_killed < 10001:
                         levels(6)
+                        Enemy1.health = 10000
                     elif 0 <= enemies_killed <= 30:
                         levels(1)
+                        Enemy1.health = 500
             for enemy in enemy1_group:
                 enemy.destroy(projectiles_group)
                 if enemy.rect.top > RES[1]:
@@ -315,7 +366,7 @@ def game():
             lose_text = font.render("DEFEATED", True, (255, 0, 0))
             win_text = font.render("YOU WON!!", True, (0, 255, 0))
             money(player1.gold)
-            if enemies_killed >= 100:
+            if enemies_killed >= 1000:
                 win = True
                 game_over = True
             if enemies_off_screen_count >= 30:
@@ -355,32 +406,40 @@ def game():
 
 def upgrade():
     upgrade_cost = 10000
-    upgrade_cost1 = 1000
+    upgrade_cost1 = 3000
     upgrade_cost2 = 5000
     upgrade_cost3 = 300000
+    upgrade_cost4 = 20000
+    upgrade_cost5 = 15000
+    cooldown_max = False
     while True:
         screen.fill((100, 100, 100))
         upgrade_mouse = pygame.mouse.get_pos()
         pygame.draw.rect(screen, (17, 130, 242), (0, 0, 1280, 50))
         upgrade_title_text = get_font(20).render('Upgrade your ship power', True, (17, 235, 242))
-        upgrade_bullet_health = Button(None, '+ Strength', (400, 100), get_font(40), (0, 0, 0), (255, 255, 255))
-        upgrade_bullet_cooldown = Button(None, '+ Cooldown', (400, 225), get_font(40), (0, 0, 0), (255, 255, 255))
-        upgrade_bullet_speed = Button(None, '+ Speed', (400, 350), get_font(40), (0, 0, 0), (255, 255, 255))
-        upgrade_bullet_type = Button(None, '+ Multiple shots', (400, 475), get_font(40), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_health = Button(None, '+ Strength', (400, 100), get_font(35), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_cooldown = Button(None, '+ Cooldown', (400, 200), get_font(35), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_speed = Button(None, '+ Speed', (400, 300), get_font(35), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_type = Button(None, '+ Multiple shots', (400, 400), get_font(35), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_size_x = Button(None, '+ size_x', (200, 500), get_font(30), (0, 0, 0), (255, 255, 255))
+        upgrade_bullet_size_y = Button(None, '+ size_y', (600, 500), get_font(30), (0, 0, 0), (255, 255, 255))
         upgrade_back = Button(None, "<--", (30, 20), get_font(20), (8, 70, 99), (255, 255, 255))
-        bullet_health_text = font.render("bullet health: {}".format(Projectiles.health), True, (255, 255, 255))
+        bullet_health_text = font.render("Bullet health: {}".format(Projectiles.health), True, (255, 255, 255))
         bullets_speed_text = font.render("Bullet speed: {}".format(Projectiles.speed), True, (255, 255, 255))
         bullet_cooldown_text = font.render("Bullet cooldown: {}".format(Player.cooldown_time), True, (255, 255, 255))
         bullet_type = font.render("Bullet type: {}".format(Player.bullet_type), True, (255, 255, 255))
+        bullet_size = font.render("Size: {}, {}".format(Projectiles.size_x, Projectiles.size_y), True, (255, 255, 255))
         player_gold_text = font.render("gold: {}".format(player1.gold), True, (255, 255, 0))
         unavailable_text = get_font(30).render("Upgrade isn't available", True, (255, 0, 0))
         screen.blit(upgrade_title_text, (180, 20))
-        list = [upgrade_bullet_health, upgrade_back, upgrade_bullet_cooldown, upgrade_bullet_speed, upgrade_bullet_type]
+        list = [upgrade_bullet_health, upgrade_back, upgrade_bullet_cooldown, upgrade_bullet_speed, upgrade_bullet_type,
+                upgrade_bullet_size_x, upgrade_bullet_size_y]
+        screen.blit(player_gold_text, (0, 100))
         screen.blit(bullet_health_text, (0, 150))
         screen.blit(bullets_speed_text, (0, 200))
         screen.blit(bullet_cooldown_text, (0, 250))
-        screen.blit(player_gold_text, (0, 300))
-        screen.blit(bullet_type, (0, 350))
+        screen.blit(bullet_type, (0, 300))
+        screen.blit(bullet_size, (0, 350))
         change_update(upgrade_mouse, screen, list)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -389,29 +448,47 @@ def upgrade():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if upgrade_bullet_health.checkforInput(upgrade_mouse):
                     if player1.gold > upgrade_cost:
+                        player1.gold -= upgrade_cost
                         upgrade_cost += 200
                         Projectiles.health += 100
-                        player1.gold -= upgrade_cost
                     else:
                         screen.blit(unavailable_text, (50, 300))
                 if upgrade_bullet_cooldown.checkforInput(upgrade_mouse):
-                    if player1.gold > upgrade_cost1 and Player.cooldown_time > 100:
-                        upgrade_cost1 += 300
-                        Player.cooldown_time -= 20
+                    if player1.gold > upgrade_cost1 and Player.cooldown_time > 200:
                         player1.gold -= upgrade_cost1
+                        upgrade_cost1 += 1000
+                        Player.cooldown_time -= 50
+                        if Player.cooldown_time == 200:
+                            cooldown_max = True
                     else:
                         screen.blit(unavailable_text, (50, 300))
                 if upgrade_bullet_speed.checkforInput(upgrade_mouse):
                     if player1.gold > upgrade_cost2:
-                        upgrade_cost2 += 200
                         player1.gold -= upgrade_cost2
+                        upgrade_cost2 += 200
                         Projectiles.speed += 1
                     else:
                         screen.blit(unavailable_text, (50, 300))
                 if upgrade_bullet_type.checkforInput(upgrade_mouse):
-                    if player1.gold > upgrade_cost3:
+                    if player1.gold > upgrade_cost3 and Player.bullet_type == 1:
                         player1.gold -= upgrade_cost3
+                        upgrade_cost3 += 500000
                         Player.bullet_type = 2
+                    if player1.gold > upgrade_cost3 and Player.bullet_type == 2 and cooldown_max:
+                        Player.bullet_type = 3
+                        Player.cooldown_time = 50
+                    elif player1.gold < upgrade_cost3:
+                        screen.blit(unavailable_text, (50, 300))
+                if upgrade_bullet_size_x.checkforInput(upgrade_mouse):
+                    if player1.gold > upgrade_cost4:
+                        player1.gold -= upgrade_cost4
+                        upgrade_cost4 += 2000
+                        Projectiles.size_x += 5
+                if upgrade_bullet_size_y.checkforInput(upgrade_mouse):
+                    if player1.gold > upgrade_cost5:
+                        player1.gold -= upgrade_cost5
+                        upgrade_cost5 += 2000
+                        Projectiles.size_y += 5
                 if upgrade_back.checkforInput(upgrade_mouse):
                     menu()
         pygame.display.flip()
@@ -473,6 +550,7 @@ def spaceships_museum():
                     game()
         pygame.display.flip()
         pygame.display.update()
+
 
 
 def menu():
